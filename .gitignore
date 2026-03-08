@@ -1,0 +1,5 @@
+# Backend - Dự Án Đặt Sân Thể Thao
+node_modules/
+.env
+dist/
+*.log
