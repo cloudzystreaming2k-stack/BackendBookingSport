@@ -1,7 +1,6 @@
-import Court from '../models/Court.model.js';
 import Booking from '../models/Booking.model.js';
 import User from '../models/User.model.js';
-import CourtType from '../models/CourtType.model.js';
+import Court from '../models/Court.model.js';
 import asyncHandler from 'express-async-handler';
 
 // ─── USER MANAGEMENT ─────────────────────────────────────────────
@@ -109,30 +108,6 @@ export const deleteUser = asyncHandler(async (req, res) => {
    if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
 
    res.json({ message: `Đã xóa tài khoản ${user.email} thành công.` });
-});
-
-
-// @desc    Thêm sân mới
-// @route   POST /api/admin/courts
-export const createCourt = asyncHandler(async (req, res) => {
-   const court = await Court.create(req.body);
-   res.status(201).json(court);
-});
-
-// @desc    Cập nhật sân
-// @route   PUT /api/admin/courts/:id
-export const updateCourt = asyncHandler(async (req, res) => {
-   const court = await Court.findByIdAndUpdate(req.params.id, req.body, { new: true });
-   if (!court) return res.status(404).json({ message: 'Không tìm thấy sân.' });
-   res.json(court);
-});
-
-// @desc    Xóa sân
-// @route   DELETE /api/admin/courts/:id
-export const deleteCourt = asyncHandler(async (req, res) => {
-   const court = await Court.findByIdAndDelete(req.params.id);
-   if (!court) return res.status(404).json({ message: 'Không tìm thấy sân.' });
-   res.json({ message: 'Đã xóa sân thành công.' });
 });
 
 // @desc    Lấy tất cả đơn đặt sân
