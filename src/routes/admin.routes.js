@@ -9,6 +9,9 @@ import {
 import {
    getAllCourtTypes, createCourtType, updateCourtType, deleteCourtType,
 } from '../controllers/courtType.controller.js';
+import {
+   getAllFacilities, createFacility, updateFacility, deleteFacility,
+} from '../controllers/facility.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 import { uploadCourtImages } from '../middlewares/upload.middleware.js';
 
@@ -52,5 +55,14 @@ router.route('/court-types')
 router.route('/court-types/:id')
    .put(updateCourtType)
    .delete(deleteCourtType);
+
+// Facility Management
+router.route('/facilities')
+   .get(getAllFacilities)
+   .post(createFacility);
+
+router.route('/facilities/:id')
+   .put(updateFacility)
+   .delete(deleteFacility);
 
 export default router;

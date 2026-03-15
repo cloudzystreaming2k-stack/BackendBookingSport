@@ -18,7 +18,7 @@ const courtSchema = new mongoose.Schema({
    status: { type: String, enum: ['active', 'maintenance'], default: 'active' },
    images: [{ type: String }],     // Tối đa 5 URL từ Cloudinary
    mainImage: { type: String },    // URL ảnh đại diện (phải nằm trong mảng images)
-   facilities: [{ type: String }], // ['Wifi', 'Gửi xe', 'Căng tin'...]
+   facilities: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Facility' }], // Liên kết tới bảng Facility
    isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

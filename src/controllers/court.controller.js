@@ -19,6 +19,7 @@ export const getCourts = asyncHandler(async (req, res) => {
    const total = await Court.countDocuments(filter);
    const courts = await Court.find(filter)
       .populate('typeId', 'name icon color')
+      .populate('facilities', 'name icon')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -30,7 +31,9 @@ export const getCourts = asyncHandler(async (req, res) => {
 // @route   GET /api/courts/:id
 // @access  Public
 export const getCourtById = asyncHandler(async (req, res) => {
-   const court = await Court.findById(req.params.id).populate('typeId', 'name icon color minPlayers maxPlayers');
+   const court = await Court.findById(req.params.id)
+      .populate('typeId', 'name icon color minPlayers maxPlayers')
+      .populate('facilities', 'name icon description');
    if (!court) return res.status(404).json({ message: 'Không tìm thấy sân.' });
    res.json(court);
 });
@@ -53,6 +56,7 @@ export const getAllCourts = asyncHandler(async (req, res) => {
 
    const courts = await Court.find(filter)
       .populate('typeId', 'name icon color minPlayers maxPlayers')
+      .populate('facilities', 'name icon description')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -96,7 +100,10 @@ export const createCourt = asyncHandler(async (req, res) => {
       facilities: facilitiesArr,
    });
 
-   const populated = await court.populate('typeId', 'name icon color');
+   const populated = await court.populate([
+      { path: 'typeId', select: 'name icon color' },
+      { path: 'facilities', select: 'name icon' }
+   ]);
    res.status(201).json(populated);
 });
 
@@ -159,7 +166,10 @@ export const updateCourt = asyncHandler(async (req, res) => {
    }
 
    const updated = await court.save();
-   const populated = await updated.populate('typeId', 'name icon color');
+   const populated = await updated.populate([
+      { path: 'typeId', select: 'name icon color' },
+      { path: 'facilities', select: 'name icon' }
+   ]);
    res.json(populated);
 });
 
