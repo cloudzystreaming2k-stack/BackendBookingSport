@@ -53,9 +53,20 @@ export const getUserById = asyncHandler(async (req, res) => {
 export const createUserByAdmin = asyncHandler(async (req, res) => {
    const { name, email, password, phone, role } = req.body;
 
-   const userExists = await User.findOne({ email });
-   if (userExists) {
-      return res.status(400).json({ message: 'Email này đã được đăng ký.' });
+   // Kiểm tra Email hoặc Số điện thoại đã tồn tại
+   const orConditions = [{ email }];
+   if (phone) {
+      orConditions.push({ phone });
+   }
+
+   const existingUser = await User.findOne({ $or: orConditions });
+   if (existingUser) {
+      if (existingUser.email === email) {
+         return res.status(400).json({ message: 'Email này đã được đăng ký.' });
+      }
+      if (phone && existingUser.phone === phone) {
+         return res.status(400).json({ message: 'Số điện thoại này đã được đăng ký.' });
+      }
    }
 
    const user = await User.create({ name, email, password, phone, role: role || 'user' });
@@ -78,6 +89,28 @@ export const updateUser = asyncHandler(async (req, res) => {
    if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
 
    const { name, email, phone, role } = req.body;
+
+   // Block thay đổi gây trùng lặp (nếu tồn tại req thay đổi email, phone)
+   const orConditions = [];
+   if (email && email !== user.email) orConditions.push({ email });
+   if (phone && phone !== user.phone) orConditions.push({ phone });
+
+   if (orConditions.length > 0) {
+      const existingUser = await User.findOne({ 
+         _id: { $ne: req.params.id }, 
+         $or: orConditions 
+      });
+
+      if (existingUser) {
+         if (email && existingUser.email === email) {
+            return res.status(400).json({ message: 'Email này đã được đăng ký cho tài khoản khác.' });
+         }
+         if (phone && existingUser.phone === phone) {
+            return res.status(400).json({ message: 'Số điện thoại này đã được đăng ký cho tài khoản khác.' });
+         }
+      }
+   }
+
    if (name) user.name = name;
    if (email) user.email = email;
    if (phone) user.phone = phone;
