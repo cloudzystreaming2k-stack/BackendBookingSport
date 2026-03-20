@@ -229,6 +229,76 @@ export const googleLogin = asyncHandler(async (req, res) => {
    }
 });
 
+// @desc    Xác thực qua Facebook OAuth
+// @route   POST /api/auth/facebook
+// @access  Public
+export const facebookLogin = asyncHandler(async (req, res) => {
+   const { token } = req.body;
+
+   if (!token) {
+      return res.status(400).json({ message: 'Không tìm thấy accessToken Facebook.' });
+   }
+
+   try {
+      // 1. Dùng mã token gọi thẳng vào Graph API của FB để lấy dữ liệu
+      const fbResponse = await axios.get(`https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${token}`);
+      const { name, email, picture } = fbResponse.data;
+
+      // Facebook đôi khi ngầm định không trả về email nếu User đăng ký bằng SĐT
+      if (!email) {
+         return res.status(400).json({ message: 'Tài khoản Facebook chưa được cấp quyền Email, vui lòng thử lại hoặc dùng phương pháp khác.' });
+      }
+
+      const avatarUrl = picture?.data?.url || '';
+
+      // 2. Tìm kiếm và Upsert User giống hệt luồng Google
+      let user = await User.findOne({ email });
+      let isNew = false;
+
+      if (user) {
+         if (!user.avatar && avatarUrl) {
+            user.avatar = avatarUrl;
+            await user.save({ validateBeforeSave: false });
+         }
+
+         if (!user.password || !user.phone || !user.gender || !user.dateOfBirth) {
+            isNew = true;
+         }
+      } else {
+         user = await User.create({
+            name,
+            email,
+            password: null,
+            role: 'user',
+            avatar: avatarUrl,
+         });
+         isNew = true;
+      }
+
+      // 3. Cấp Token hệ thống cho Frontend
+      const accessToken = generateAccessToken({ id: user._id, role: user.role });
+      const refreshToken = generateRefreshToken({ id: user._id });
+
+      user.refreshToken = refreshToken;
+      await user.save({ validateBeforeSave: false });
+
+      setRefreshTokenCookie(res, refreshToken);
+
+      res.json({
+         _id: user._id,
+         name: user.name,
+         email: user.email,
+         role: user.role,
+         isNew,
+         accessToken,
+      });
+
+   } catch (error) {
+      console.error('Facebook Auth Error:', error.response?.data || error.message);
+      return res.status(401).json({ message: 'Lỗi Xác thực Facebook: ' + (error.response?.data?.error?.message || error.message || 'Unknown') });
+   }
+});
+
 // @desc    Bổ sung thông tin cá nhân sau khi đăng nhập Google
 // @route   POST /api/auth/update-profile
 // @access  Private
