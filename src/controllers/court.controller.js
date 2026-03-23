@@ -5,11 +5,10 @@ import asyncHandler from 'express-async-handler';
 // @route   GET /api/courts
 // @access  Public
 export const getCourts = asyncHandler(async (req, res) => {
-   const { type, district, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
+   const { type, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
 
    const filter = { isActive: true, status: 'active' };
    if (type) filter.typeId = type;
-   if (district) filter.district = { $regex: district, $options: 'i' };
    if (minPrice || maxPrice) {
       filter['pricing.morning'] = {};
       if (minPrice) filter['pricing.morning'].$gte = Number(minPrice);
@@ -46,17 +45,16 @@ import cloudinary from '../config/cloudinary.config.js';
 // @route   GET /api/admin/courts
 // @access  Admin
 export const getAllCourts = asyncHandler(async (req, res) => {
-   const { typeId, status, district, search } = req.query;
+   const { typeId, status, search } = req.query;
 
    const filter = {};
    if (typeId) filter.typeId = typeId;
    if (status) filter.status = status;
-   if (district) filter.district = { $regex: district, $options: 'i' };
    if (search) filter.name = { $regex: search, $options: 'i' };
 
    const courts = await Court.find(filter)
       .populate('typeId', 'name icon color minPlayers maxPlayers')
-      .populate('facilities', 'name icon description')
+      .populate('facilities')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -68,7 +66,7 @@ export const getAllCourts = asyncHandler(async (req, res) => {
 // @access  Admin
 export const createCourt = asyncHandler(async (req, res) => {
    const {
-      name, code, typeId, address, district, description,
+      name, code, typeId, address, latitude, longitude, description,
       capacity, openTime, closeTime,
       pricingMorning, pricingAfternoon, pricingEvening,
       mainImageIndex, facilities,
@@ -85,7 +83,9 @@ export const createCourt = asyncHandler(async (req, res) => {
       : facilities ? facilities.split(',').map((s) => s.trim()).filter(Boolean) : [];
 
    const court = await Court.create({
-      name, code, typeId, address, district,
+      name, code, typeId, address,
+      latitude: Number(latitude),
+      longitude: Number(longitude),
       description: description || '',
       capacity: Number(capacity) || 4,
       openTime: openTime || '06:00',
@@ -115,7 +115,7 @@ export const updateCourt = asyncHandler(async (req, res) => {
    if (!court) return res.status(404).json({ message: 'Không tìm thấy sân.' });
 
    const {
-      name, code, typeId, address, district, description,
+      name, code, typeId, address, latitude, longitude, description,
       capacity, openTime, closeTime,
       pricingMorning, pricingAfternoon, pricingEvening,
       mainImageIndex, removeImages, facilities, status,
@@ -125,7 +125,8 @@ export const updateCourt = asyncHandler(async (req, res) => {
    if (code !== undefined) court.code = code;
    if (typeId !== undefined) court.typeId = typeId;
    if (address !== undefined) court.address = address;
-   if (district !== undefined) court.district = district;
+   if (latitude !== undefined) court.latitude = Number(latitude);
+   if (longitude !== undefined) court.longitude = Number(longitude);
    if (description !== undefined) court.description = description;
    if (capacity !== undefined) court.capacity = Number(capacity);
    if (openTime !== undefined) court.openTime = openTime;
