@@ -51,7 +51,11 @@ export const getUserById = asyncHandler(async (req, res) => {
 // @route   POST /api/admin/users
 // @access  Admin
 export const createUserByAdmin = asyncHandler(async (req, res) => {
-   const { name, email, password, phone, role } = req.body;
+   const { firstName, lastName, email, password, phone, role, gender, dateOfBirth } = req.body;
+
+   if (!firstName?.trim() || !lastName?.trim()) {
+      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ Họ và Tên.' });
+   }
 
    // Kiểm tra Email hoặc Số điện thoại đã tồn tại
    const orConditions = [{ email }];
@@ -69,11 +73,12 @@ export const createUserByAdmin = asyncHandler(async (req, res) => {
       }
    }
 
-   const user = await User.create({ name, email, password, phone, role: role || 'user' });
+   const user = await User.create({ firstName, lastName, email, password, phone, role: role || 'user', gender, dateOfBirth });
 
    res.status(201).json({
       _id: user._id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       phone: user.phone,
       role: user.role,
@@ -88,7 +93,7 @@ export const updateUser = asyncHandler(async (req, res) => {
    const user = await User.findById(req.params.id);
    if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
 
-   const { name, email, phone, role } = req.body;
+   const { firstName, lastName, email, phone, role } = req.body;
 
    // Block thay đổi gây trùng lặp (nếu tồn tại req thay đổi email, phone)
    const orConditions = [];
@@ -111,7 +116,8 @@ export const updateUser = asyncHandler(async (req, res) => {
       }
    }
 
-   if (name) user.name = name;
+   if (firstName) user.firstName = firstName;
+   if (lastName !== undefined) user.lastName = lastName;
    if (email) user.email = email;
    if (phone) user.phone = phone;
    if (role) user.role = role;
@@ -120,7 +126,8 @@ export const updateUser = asyncHandler(async (req, res) => {
 
    res.json({
       _id: updated._id,
-      name: updated.name,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
       email: updated.email,
       phone: updated.phone,
       role: updated.role,

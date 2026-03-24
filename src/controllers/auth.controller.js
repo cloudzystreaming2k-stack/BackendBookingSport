@@ -16,7 +16,11 @@ import {
 // @route   POST /api/auth/register
 // @access  Public
 export const register = asyncHandler(async (req, res) => {
-   const { name, email, password, phone, gender, dateOfBirth } = req.body;
+   const { firstName, lastName, email, password, phone, gender, dateOfBirth } = req.body;
+
+   if (!firstName?.trim() || !lastName?.trim()) {
+      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ Họ và Tên.' });
+   }
 
    if (!gender || !['male', 'female', 'other'].includes(gender)) {
       return res.status(400).json({ message: 'Vui lòng chọn giới tính hợp lệ (Nam, Nữ hoặc Khác).' });
@@ -42,12 +46,11 @@ export const register = asyncHandler(async (req, res) => {
       }
    }
 
-   const user = await User.create({ name, email, password, phone, gender, dateOfBirth });
+   const user = await User.create({ firstName, lastName, email, password, phone, gender, dateOfBirth });
 
    const accessToken = generateAccessToken({ id: user._id, role: user.role });
    const refreshToken = generateRefreshToken({ id: user._id });
 
-   // Lưu refreshToken vào DB để hỗ trợ rotation & blacklist
    user.refreshToken = refreshToken;
    await user.save({ validateBeforeSave: false });
 
@@ -55,7 +58,8 @@ export const register = asyncHandler(async (req, res) => {
 
    res.status(201).json({
       _id: user._id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       role: user.role,
       accessToken,
@@ -83,7 +87,8 @@ export const login = asyncHandler(async (req, res) => {
 
    res.json({
       _id: user._id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       role: user.role,
       accessToken,
@@ -160,25 +165,25 @@ export const googleLogin = asyncHandler(async (req, res) => {
    }
 
    try {
-      let email, name, picture;
+      let email, firstName, lastName, picture;
 
       if (token.startsWith('eyJ')) {
-         // Là id_token nguyên bản (ví dụ tử tool hoặc postman)
          const ticket = await client.verifyIdToken({
             idToken: token,
             audience: process.env.GOOGLE_CLIENT_ID,
          });
          const payload = ticket.getPayload();
          email = payload.email;
-         name = payload.name;
+         firstName = payload.given_name || payload.name?.split(' ').pop() || 'User';
+         lastName  = payload.family_name || payload.name?.split(' ').slice(0, -1).join(' ') || '';
          picture = payload.picture;
       } else {
-         // Là access_token do component Frontend custom (useGoogleLogin) tự fetch
          const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${token}` }
          });
          email = response.data.email;
-         name = response.data.name;
+         firstName = response.data.given_name || response.data.name?.split(' ').pop() || 'User';
+         lastName  = response.data.family_name || response.data.name?.split(' ').slice(0, -1).join(' ') || '';
          picture = response.data.picture;
       }
 
@@ -186,23 +191,21 @@ export const googleLogin = asyncHandler(async (req, res) => {
       let isNew = false;
 
       if (!user) {
-         // Tài khoản mới toanh
          user = await User.create({
-            name,
+            firstName,
+            lastName,
             email,
-            password: null, // Sẽ điền sau
+            password: null,
             role: 'user',
             avatar: picture,
          });
          isNew = true;
       } else {
-         // Cập nhật avatar nếu User cũ chưa có
          if (!user.avatar && picture) {
              user.avatar = picture;
          }
       }
 
-      // Kiểm tra xem đã đầy đủ thông tin chưa
       if (!user.password || !user.phone || !user.gender || !user.dateOfBirth) {
          isNew = true;
       }
@@ -217,10 +220,11 @@ export const googleLogin = asyncHandler(async (req, res) => {
 
       res.json({
          _id: user._id,
-         name: user.name,
+         firstName: user.firstName,
+         lastName: user.lastName,
          email: user.email,
          role: user.role,
-         isNew, // Gắn cờ cho Frontend bắt Popup bổ sung thông tin
+         isNew,
          accessToken,
       });
    } catch (error) {
@@ -242,16 +246,19 @@ export const facebookLogin = asyncHandler(async (req, res) => {
    try {
       // 1. Dùng mã token gọi thẳng vào Graph API của FB để lấy dữ liệu
       const fbResponse = await axios.get(`https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${token}`);
-      const { name, email, picture } = fbResponse.data;
+      const { name: fbFullName, email, picture } = fbResponse.data;
 
-      // Facebook đôi khi ngầm định không trả về email nếu User đăng ký bằng SĐT
+      // Tách họ và tên từ chuỗi full name của Facebook
+      const nameParts = (fbFullName || '').trim().split(' ');
+      const firstName = nameParts.pop() || 'User'; // Tên = phần tử cuối
+      const lastName  = nameParts.join(' ') || '';  // Họ đệm = phần còn lại
+
       if (!email) {
          return res.status(400).json({ message: 'Tài khoản Facebook chưa được cấp quyền Email, vui lòng thử lại hoặc dùng phương pháp khác.' });
       }
 
       const avatarUrl = picture?.data?.url || '';
 
-      // 2. Tìm kiếm và Upsert User giống hệt luồng Google
       let user = await User.findOne({ email });
       let isNew = false;
 
@@ -266,7 +273,8 @@ export const facebookLogin = asyncHandler(async (req, res) => {
          }
       } else {
          user = await User.create({
-            name,
+            firstName,
+            lastName,
             email,
             password: null,
             role: 'user',
@@ -275,7 +283,6 @@ export const facebookLogin = asyncHandler(async (req, res) => {
          isNew = true;
       }
 
-      // 3. Cấp Token hệ thống cho Frontend
       const accessToken = generateAccessToken({ id: user._id, role: user.role });
       const refreshToken = generateRefreshToken({ id: user._id });
 
@@ -286,7 +293,8 @@ export const facebookLogin = asyncHandler(async (req, res) => {
 
       res.json({
          _id: user._id,
-         name: user.name,
+         firstName: user.firstName,
+         lastName: user.lastName,
          email: user.email,
          role: user.role,
          isNew,
@@ -340,7 +348,8 @@ export const updateProfile = asyncHandler(async (req, res) => {
 
    res.json({
       _id: user._id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       role: user.role,
       message: 'Cập nhật thông tin thành công.'

@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
-   name: { type: String, required: true, trim: true },
+   firstName: { type: String, required: true, trim: true }, // Tên (VD: Tuấn)
+   lastName:  { type: String, required: true, trim: true }, // Họ và đệm (VD: Nguyễn Minh)
    email: { type: String, required: true, unique: true, lowercase: true },
    password: { type: String, minlength: 6 },
    phone: { type: String, default: '' },
