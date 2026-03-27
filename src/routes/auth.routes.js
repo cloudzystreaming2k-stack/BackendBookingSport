@@ -1,10 +1,11 @@
 import express from 'express';
-import { register, login, refreshToken, logout, getProfile, googleLogin, facebookLogin, updateProfile } from '../controllers/auth.controller.js';
+import { register, login, refreshToken, logout, getProfile, googleLogin, facebookLogin, updateProfile, registerOwner } from '../controllers/auth.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
 router.post('/register', register);
+router.post('/register-owner', registerOwner);
 router.post('/login', login);
 router.post('/refresh-token', refreshToken);
 router.post('/logout', protect, logout);

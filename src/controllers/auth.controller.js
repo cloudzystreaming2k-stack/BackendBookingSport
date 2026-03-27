@@ -66,6 +66,69 @@ export const register = asyncHandler(async (req, res) => {
    });
 });
 
+// @desc    Đăng ký tài khoản Đối tác Chủ Sân
+// @route   POST /api/auth/register-owner
+// @access  Public
+export const registerOwner = asyncHandler(async (req, res) => {
+   const { 
+      firstName, lastName, email, phone, gender, dateOfBirth, password,
+      ownerInfo
+   } = req.body;
+
+   // 1. Kiểm tra Validate cơ bản
+   if (!firstName?.trim() || !lastName?.trim()) {
+      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ Họ và Tên.' });
+   }
+
+   if (!ownerInfo || !ownerInfo.ownerName || !ownerInfo.identityNumber || !ownerInfo.businessName || !ownerInfo.taxCode || !ownerInfo.bankName || !ownerInfo.accountNumber) {
+      return res.status(400).json({ message: 'Vui lòng điền đầy đủ các thông tin Kinh doanh và Thanh toán bắt buộc.' });
+   }
+
+   // 2. Chống trùng lặp email / sdt
+   const orConditions = [{ email }];
+   if (phone) {
+      orConditions.push({ phone });
+   }
+
+   const existingUser = await User.findOne({ $or: orConditions });
+   if (existingUser) {
+      if (existingUser.email === email) {
+         return res.status(400).json({ message: 'Email này đã được đăng ký trong hệ thống.' });
+      }
+      if (phone && existingUser.phone === phone) {
+         return res.status(400).json({ message: 'Số điện thoại này đã được đăng ký.' });
+      }
+   }
+
+   // 3. Insert Database
+   const user = await User.create({ 
+      firstName, lastName, email, password, phone, gender, dateOfBirth,
+      role: 'owner',
+      status: 'pending',
+      ownerInfo: {
+          ownerName: ownerInfo.ownerName,
+          identityNumber: ownerInfo.identityNumber,
+          businessName: ownerInfo.businessName,
+          taxCode: ownerInfo.taxCode,
+          businessAddress: ownerInfo.businessAddress,
+          businessPhone: ownerInfo.businessPhone,
+          bankName: ownerInfo.bankName.toUpperCase(),
+          accountNumber: ownerInfo.accountNumber,
+          accountOwner: ownerInfo.accountOwner.toUpperCase()
+      }
+   });
+
+   res.status(201).json({
+      message: 'Đăng ký Đối tác thành công. Vui lòng chờ phê duyệt từ Ban quản trị.',
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      status: user.status
+   });
+});
+
+
+
 // @desc    Đăng nhập
 // @route   POST /api/auth/login
 // @access  Public
@@ -75,6 +138,16 @@ export const login = asyncHandler(async (req, res) => {
    const user = await User.findOne({ email });
    if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng.' });
+   }
+
+   // Phân quyền đặc thù cho Owner Login
+   if (user.role === 'owner') {
+      if (user.status === 'pending') {
+          return res.status(403).json({ message: 'Tài khoản Chủ Sân của bạn đang chờ Admin phê duyệt.' });
+      }
+      if (user.status === 'rejected') {
+          return res.status(403).json({ message: 'Tài khoản đăng ký Đối tác đã bị từ chối. Vui lòng liên hệ Admin.' });
+      }
    }
 
    const accessToken = generateAccessToken({ id: user._id, role: user.role });

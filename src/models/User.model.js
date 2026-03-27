@@ -9,7 +9,19 @@ const userSchema = new mongoose.Schema({
    phone: { type: String, default: '' },
    gender: { type: String, enum: ['male', 'female', 'other'] },
    dateOfBirth: { type: Date },
-   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+   role: { type: String, enum: ['user', 'admin', 'owner'], default: 'user' },
+   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved' },
+   ownerInfo: {
+      ownerName: { type: String, trim: true },
+      identityNumber: { type: String, trim: true },
+      businessName: { type: String, trim: true },
+      taxCode: { type: String, trim: true },
+      businessAddress: { type: String, trim: true },
+      businessPhone: { type: String, trim: true },
+      bankName: { type: String, trim: true },
+      accountNumber: { type: String, trim: true },
+      accountOwner: { type: String, trim: true }
+   },
    avatar: { type: String, default: '' },
    refreshToken: { type: String, default: '' }, // Lưu Refresh Token để kiểm tra (rotation)
 }, { timestamps: true });

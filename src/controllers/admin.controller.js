@@ -12,7 +12,11 @@ export const getAllUsers = asyncHandler(async (req, res) => {
    const { role, search, page = 1, limit = 10 } = req.query;
 
    const filter = {};
-   if (role) filter.role = role;
+   if (role) {
+      filter.role = role;
+   } else {
+      filter.role = { $ne: 'owner' };
+   }
    if (search) {
       filter.$or = [
          { name: { $regex: search, $options: 'i' } },
@@ -186,3 +190,48 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
    res.json({ totalBookings, totalCourts, totalUsers, revenueData });
 });
+
+// ─── OWNER MANAGEMENT ──────────────────────────────────────────
+
+// @desc    Lấy danh sách Đối tác (Chủ sân)
+// @route   GET /api/admin/owners
+// @access  Admin
+export const getOwners = asyncHandler(async (req, res) => {
+   const owners = await User.find({ role: 'owner' })
+      .select('-password -refreshToken')
+      .sort({ createdAt: -1 });
+
+   res.json({ owners });
+});
+
+// @desc    Cập nhật trạng thái duyệt của Chủ Sân
+// @route   PUT /api/admin/owners/:id/status
+// @access  Admin
+export const updateOwnerStatus = asyncHandler(async (req, res) => {
+   const { status, rejectionReason } = req.body;
+   
+   if (!['approved', 'rejected', 'pending'].includes(status)) {
+       return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+   }
+
+   const user = await User.findOne({ _id: req.params.id, role: 'owner' });
+
+   if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy Đối tác' });
+   }
+
+   user.status = status;
+   
+   if (status === 'rejected') {
+       if (!user.ownerInfo) user.ownerInfo = {};
+       user.ownerInfo.rejectionReason = rejectionReason;
+   } else if (status === 'approved') {
+       user.ownerInfo.approvedAt = new Date().toISOString();
+       user.ownerInfo.approvedBy = req.user.email; // Đang là email admin
+   }
+
+   await user.save();
+   
+   res.json({ message: `Cập nhật trạng thái đối tác thành ${status}` });
+});
+

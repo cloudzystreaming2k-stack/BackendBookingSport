@@ -5,6 +5,7 @@ import {
 import {
    getAllBookings, updateBookingStatus, getDashboardStats,
    getAllUsers, getUserById, createUserByAdmin, updateUser, deleteUser,
+   getOwners, updateOwnerStatus
 } from '../controllers/admin.controller.js';
 import {
    getAllCourtTypes, createCourtType, updateCourtType, deleteCourtType,
@@ -64,5 +65,9 @@ router.route('/facilities')
 router.route('/facilities/:id')
    .put(updateFacility)
    .delete(deleteFacility);
+
+// Owner Management
+router.get('/owners', getOwners);
+router.put('/owners/:id/status', updateOwnerStatus);
 
 export default router;
