@@ -4,7 +4,7 @@ import {
 } from '../controllers/court.controller.js';
 import {
    getAllBookings, updateBookingStatus, getDashboardStats,
-   getAllUsers, getUserById, createUserByAdmin, updateUser, deleteUser,
+   getAllUsers, getUserById, createUserByAdmin, updateUser, deleteUser, toggleUserStatus,
    getOwners, updateOwnerStatus
 } from '../controllers/admin.controller.js';
 import {
@@ -47,6 +47,8 @@ router.route('/users/:id')
    .get(getUserById)
    .put(updateUser)
    .delete(deleteUser);
+
+router.patch('/users/:id/status', toggleUserStatus);
 
 // Court Type Management
 router.route('/court-types')

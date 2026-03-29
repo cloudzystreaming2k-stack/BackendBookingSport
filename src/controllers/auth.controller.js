@@ -140,6 +140,10 @@ export const login = asyncHandler(async (req, res) => {
       return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng.' });
    }
 
+   if (user.isActive === false) {
+      return res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.' });
+   }
+
    // Phân quyền đặc thù cho Owner Login
    if (user.role === 'owner') {
       if (user.status === 'pending') {

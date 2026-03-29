@@ -139,6 +139,23 @@ export const updateUser = asyncHandler(async (req, res) => {
    });
 });
 
+// @desc    Khóa/mở khóa tài khoản người dùng
+// @route   PATCH /api/admin/users/:id/status
+// @access  Admin
+export const toggleUserStatus = asyncHandler(async (req, res) => {
+   if (req.params.id === req.user._id.toString()) {
+      return res.status(400).json({ message: 'Không thể khóa tài khoản đang đăng nhập.' });
+   }
+
+   const user = await User.findById(req.params.id);
+   if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
+
+   user.isActive = !user.isActive;
+   await user.save();
+
+   res.json({ message: `Đã ${user.isActive ? 'mở khóa' : 'khóa'} tài khoản ${user.email} thành công.` });
+});
+
 // @desc    Xóa người dùng
 // @route   DELETE /api/admin/users/:id
 // @access  Admin

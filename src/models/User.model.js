@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
    dateOfBirth: { type: Date },
    role: { type: String, enum: ['user', 'admin', 'owner'], default: 'user' },
    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved' },
+   isActive: { type: Boolean, default: true },
    ownerInfo: {
       ownerName: { type: String, trim: true },
       identityNumber: { type: String, trim: true },
