@@ -13,6 +13,9 @@ import {
 import {
    getAllFacilities, createFacility, updateFacility, deleteFacility,
 } from '../controllers/facility.controller.js';
+import {
+   getPricingByCourt, savePricingBatch, applyBulkPricing,
+} from '../controllers/pricing.controller.js';
 import { protect, adminOnly } from '../middlewares/auth.middleware.js';
 import { uploadCourtImages } from '../middlewares/upload.middleware.js';
 
@@ -33,6 +36,11 @@ router.route('/courts/:id')
    .delete(deleteCourt);
 
 router.patch('/courts/:id/status', toggleCourtStatus);
+
+// Court Pricing
+router.get('/courts/:id/pricing',        getPricingByCourt);
+router.post('/courts/:id/pricing/batch', savePricingBatch);
+router.post('/courts/:id/pricing/bulk',  applyBulkPricing);
 
 // Booking Management
 router.get('/bookings', getAllBookings);

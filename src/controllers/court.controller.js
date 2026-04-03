@@ -1,5 +1,6 @@
 import Court from '../models/Court.model.js';
 import asyncHandler from 'express-async-handler';
+import { initDefaultPricing, cleanupPricing } from './pricing.controller.js';
 
 // @desc    Lấy danh sách sân (có filter) - Public
 // @route   GET /api/courts
@@ -90,15 +91,14 @@ export const createCourt = asyncHandler(async (req, res) => {
       capacity: Number(capacity) || 4,
       openTime: openTime || '06:00',
       closeTime: closeTime || '22:00',
-      pricing: {
-         morning: Number(pricingMorning) || 0,
-         afternoon: Number(pricingAfternoon) || 0,
-         evening: Number(pricingEvening) || 0,
-      },
+      // pricing sẽ được auto-set bởi initDefaultPricing
       images: imageUrls,
       mainImage,
       facilities: facilitiesArr,
    });
+
+   // Seed 238 slots giá mặc định (100k/slot) và sync Court.pricing
+   await initDefaultPricing(court._id);
 
    const populated = await court.populate([
       { path: 'typeId', select: 'name icon color' },
@@ -195,7 +195,11 @@ export const deleteCourt = asyncHandler(async (req, res) => {
    }
 
    await Court.findByIdAndDelete(req.params.id);
-   res.json({ message: `Đã xóa sân "${court.name}" thành công.` });
+
+   // Cascade delete: xóa toàn bộ 238 slots giá của sân
+   await cleanupPricing(req.params.id);
+
+   res.json({ message: `Đã xóa sân "${court.name}" và toàn bộ cấu hình giá thành công.` });
 });
 
 // @desc    Đổi trạng thái sân
