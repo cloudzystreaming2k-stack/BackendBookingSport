@@ -6,10 +6,12 @@ import { initDefaultPricing, cleanupPricing } from './pricing.controller.js';
 // @route   GET /api/courts
 // @access  Public
 export const getCourts = asyncHandler(async (req, res) => {
-   const { type, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
+   const { type, minPrice, maxPrice, provinceCode, districtCode, page = 1, limit = 10 } = req.query;
 
    const filter = { isActive: true, status: 'active' };
    if (type) filter.typeId = type;
+   if (provinceCode) filter.provinceCode = Number(provinceCode);
+   if (districtCode)  filter.districtCode  = Number(districtCode);
    if (minPrice || maxPrice) {
       filter['pricing.morning'] = {};
       if (minPrice) filter['pricing.morning'].$gte = Number(minPrice);
@@ -35,7 +37,21 @@ export const getCourtById = asyncHandler(async (req, res) => {
       .populate('typeId', 'name icon color minPlayers maxPlayers')
       .populate('facilities', 'name icon description');
    if (!court) return res.status(404).json({ message: 'Không tìm thấy sân.' });
-   res.json(court);
+
+   // Attach tên tỉnh/huyện bằng local lookup để không cần ObjectId ref
+   const { Province, District } = await import('../models/Province.model.js').then(async m => ({
+      Province: m.default,
+      District: (await import('../models/District.model.js')).default,
+   }));
+   const obj = court.toObject();
+   if (obj.provinceCode) {
+      obj.province = await Province.findOne({ code: obj.provinceCode }).select('code name').lean();
+   }
+   if (obj.districtCode) {
+      obj.district = await District.findOne({ code: obj.districtCode }).select('code name').lean();
+   }
+
+   res.json(obj);
 });
 
 // ─── ADMIN HANDLERS ───────────────────────────────────────────────────────────
@@ -46,12 +62,14 @@ import cloudinary from '../config/cloudinary.config.js';
 // @route   GET /api/admin/courts
 // @access  Admin
 export const getAllCourts = asyncHandler(async (req, res) => {
-   const { typeId, status, search } = req.query;
+   const { typeId, status, search, provinceCode, districtCode } = req.query;
 
    const filter = {};
    if (typeId) filter.typeId = typeId;
    if (status) filter.status = status;
    if (search) filter.name = { $regex: search, $options: 'i' };
+   if (provinceCode) filter.provinceCode = Number(provinceCode);
+   if (districtCode)  filter.districtCode  = Number(districtCode);
 
    const courts = await Court.find(filter)
       .populate('typeId', 'name icon color minPlayers maxPlayers')
@@ -69,7 +87,7 @@ export const createCourt = asyncHandler(async (req, res) => {
    const {
       name, code, typeId, address, latitude, longitude, description,
       capacity, openTime, closeTime,
-      pricingMorning, pricingAfternoon, pricingEvening,
+      provinceCode, districtCode,
       mainImageIndex, facilities,
    } = req.body;
 
@@ -87,6 +105,8 @@ export const createCourt = asyncHandler(async (req, res) => {
       name, code, typeId, address,
       latitude: Number(latitude),
       longitude: Number(longitude),
+      provinceCode: provinceCode ? Number(provinceCode) : null,
+      districtCode:  districtCode  ? Number(districtCode)  : null,
       description: description || '',
       capacity: Number(capacity) || 4,
       openTime: openTime || '06:00',
@@ -117,7 +137,7 @@ export const updateCourt = asyncHandler(async (req, res) => {
    const {
       name, code, typeId, address, latitude, longitude, description,
       capacity, openTime, closeTime,
-      pricingMorning, pricingAfternoon, pricingEvening,
+      provinceCode, districtCode,
       mainImageIndex, removeImages, facilities, status,
    } = req.body;
 
@@ -127,15 +147,13 @@ export const updateCourt = asyncHandler(async (req, res) => {
    if (address !== undefined) court.address = address;
    if (latitude !== undefined) court.latitude = Number(latitude);
    if (longitude !== undefined) court.longitude = Number(longitude);
+   if (provinceCode !== undefined) court.provinceCode = provinceCode ? Number(provinceCode) : null;
+   if (districtCode  !== undefined) court.districtCode  = districtCode  ? Number(districtCode)  : null;
    if (description !== undefined) court.description = description;
    if (capacity !== undefined) court.capacity = Number(capacity);
    if (openTime !== undefined) court.openTime = openTime;
    if (closeTime !== undefined) court.closeTime = closeTime;
    if (status !== undefined) court.status = status;
-
-   if (pricingMorning !== undefined) court.pricing.morning = Number(pricingMorning);
-   if (pricingAfternoon !== undefined) court.pricing.afternoon = Number(pricingAfternoon);
-   if (pricingEvening !== undefined) court.pricing.evening = Number(pricingEvening);
 
    if (facilities !== undefined) {
       court.facilities = Array.isArray(facilities)

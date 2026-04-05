@@ -7,6 +7,10 @@ const courtSchema = new mongoose.Schema({
    address: { type: String, required: true },
    latitude: { type: Number, required: true },
    longitude: { type: Number, required: true },
+   // ── Location refs (Province & District) ─────────────────────────────────
+   provinceCode: { type: Number, default: null, index: true }, // ref Province.code
+   districtCode:  { type: Number, default: null, index: true }, // ref District.code
+   // ────────────────────────────────────────────────────────────────────────
    description: { type: String, default: '' },
    capacity: { type: Number, default: 4, min: 1 },
    openTime: { type: String, default: '06:00' },
