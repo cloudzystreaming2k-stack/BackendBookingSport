@@ -15,7 +15,8 @@ export const courtStorage = new CloudinaryStorage({
    params: {
       folder: 'datsanthethao/courts',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-      transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
+      // Dùng Cloudinary AI: Tự động fill 1920x1080 nhưng giữ lại điểm lấy nét quan trọng nhất (gravity auto)
+      transformation: [{ width: 1920, height: 1080, crop: 'fill', gravity: 'auto', quality: 'auto:best', fetch_format: 'auto' }],
    },
 });
 

@@ -162,19 +162,25 @@ export const updateCourt = asyncHandler(async (req, res) => {
          : facilities.split(',').map((s) => s.trim()).filter(Boolean);
    }
 
-   // Xử lý ảnh mới
+   // Xử lý xóa ảnh cũ
+   let existingImages = [...court.images];
+   if (removeImages) {
+      const toRemove = Array.isArray(removeImages) ? removeImages : [removeImages];
+      for (const publicId of toRemove) {
+         await cloudinary.uploader.destroy(publicId).catch(() => null);
+      }
+      existingImages = existingImages.filter((url) => !toRemove.some((r) => url.includes(r)));
+   }
+
+   // Xử lý thêm ảnh mới
+   let newUrls = [];
    if (req.files && req.files.length > 0) {
       const getImageUrl = (f) => f.secure_url || f.path || f.url || '';
-      const newUrls = req.files.map(getImageUrl).filter(Boolean);
-      let existingImages = [...court.images];
+      newUrls = req.files.map(getImageUrl).filter(Boolean);
+   }
 
-      if (removeImages) {
-         const toRemove = Array.isArray(removeImages) ? removeImages : [removeImages];
-         for (const publicId of toRemove) {
-            await cloudinary.uploader.destroy(publicId).catch(() => null);
-         }
-         existingImages = existingImages.filter((url) => !toRemove.some((r) => url.includes(r)));
-      }
+   // Lấy danh sách ảnh sau khi xóa + thêm mới
+   if (removeImages !== undefined || newUrls.length > 0 || mainImageIndex !== undefined) {
       court.images = [...existingImages, ...newUrls].slice(0, 5);
    }
 
