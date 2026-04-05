@@ -1,4 +1,5 @@
 import Court from '../models/Court.model.js';
+import CourtPricing from '../models/CourtPricing.model.js';
 import asyncHandler from 'express-async-handler';
 import { initDefaultPricing, cleanupPricing } from './pricing.controller.js';
 
@@ -235,4 +236,48 @@ export const toggleCourtStatus = asyncHandler(async (req, res) => {
    court.status = status;
    await court.save();
    res.json({ message: `Đã cập nhật trạng thái thành "${status}".`, status: court.status });
+});
+
+// @desc    Lấy slots giá của ngày cụ thể + trạng thái booked (Public)
+// @route   GET /api/courts/:id/slots?date=YYYY-MM-DD
+// @access  Public
+export const getCourtSlotsByDate = asyncHandler(async (req, res) => {
+   const { id } = req.params;
+   const { date } = req.query;
+
+   if (!date) return res.status(400).json({ message: 'Thiếu tham số date (YYYY-MM-DD).' });
+
+   const court = await Court.findById(id);
+   if (!court) return res.status(404).json({ message: 'Không tìm thấy sân.' });
+
+   // Tính dayOfWeek từ date (0=CN, 1=T2, ..., 6=T7)
+   const dayOfWeek = new Date(date).getDay();
+
+   // Lấy slots giá theo dayOfWeek của sân từ CourtPricing
+   let pricingSlots = await CourtPricing.find({
+      court: id, dayOfWeek, isActive: true,
+   }).sort({ startTime: 1 }).lean();
+
+   // Auto-seed nếu sân chưa có pricing
+   if (pricingSlots.length === 0) {
+      const { initDefaultPricing: seedPricing } = await import('./pricing.controller.js');
+      await seedPricing(id);
+      pricingSlots = await CourtPricing.find({
+         court: id, dayOfWeek, isActive: true,
+      }).sort({ startTime: 1 }).lean();
+   }
+
+   // TODO: Nối với Booking để lấy bookedTimes khi module Booking hoàn chỉnh
+   // const bookings = await Booking.find({ court: id, date, status: { $in: ['pending', 'confirmed'] } });
+   // const bookedTimes = bookings.flatMap(b => b.slots);
+   const bookedTimes = [];
+
+   const slots = pricingSlots.map(s => ({
+      time: s.startTime,
+      endTime: s.endTime,
+      price: s.price,
+      status: bookedTimes.includes(s.startTime) ? 'booked' : 'available',
+   }));
+
+   res.json({ success: true, date, dayOfWeek, slots });
 });
