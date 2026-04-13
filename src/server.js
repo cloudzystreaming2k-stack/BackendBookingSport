@@ -11,6 +11,7 @@ import { connectDB } from './config/db.js';
 import authRoutes from './routes/auth.routes.js';
 import courtRoutes from './routes/court.routes.js';
 import bookingRoutes from './routes/booking.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import locationRoutes from './routes/location.routes.js';
 import { notFound, errorHandler } from './middlewares/error.middleware.js';
@@ -33,6 +34,8 @@ if (process.env.NODE_ENV === 'development') {
 app.use('/api/auth', authRoutes);
 app.use('/api/courts', courtRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/admin/payments', paymentRoutes); // Admin: quản lý tiền mặt
+app.use('/api/payments', paymentRoutes);       // User: tạo URL VNPay & nhận callback
 app.use('/api/admin', adminRoutes);
 app.use('/api/locations', locationRoutes); // Public: danh sách Tỉnh/Huyện
 

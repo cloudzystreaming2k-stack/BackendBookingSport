@@ -1,5 +1,6 @@
 import Court from '../models/Court.model.js';
 import CourtPricing from '../models/CourtPricing.model.js';
+import Booking from '../models/Booking.model.js';
 import asyncHandler from 'express-async-handler';
 import { initDefaultPricing, cleanupPricing } from './pricing.controller.js';
 
@@ -273,10 +274,15 @@ export const getCourtSlotsByDate = asyncHandler(async (req, res) => {
       }).sort({ startTime: 1 }).lean();
    }
 
-   // TODO: Nối với Booking để lấy bookedTimes khi module Booking hoàn chỉnh
-   // const bookings = await Booking.find({ court: id, date, status: { $in: ['pending', 'confirmed'] } });
-   // const bookedTimes = bookings.flatMap(b => b.slots);
-   const bookedTimes = [];
+   // Lấy danh sách Booking trong ngày của sân này
+   const bookings = await Booking.find({ 
+      courtId: id, 
+      date, 
+      status: { $in: ['pending', 'confirmed', 'completed'] } 
+   });
+   
+   // booking.slots là một mảng [{ startTime, endTime, price }]
+   const bookedTimes = bookings.flatMap(b => b.slots?.map(s => s.startTime) || []);
 
    const slots = pricingSlots.map(s => ({
       time: s.startTime,

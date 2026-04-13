@@ -1,4 +1,5 @@
 import Booking from '../models/Booking.model.js';
+import Payment from '../models/Payment.model.js';
 import User from '../models/User.model.js';
 import Court from '../models/Court.model.js';
 import asyncHandler from 'express-async-handler';
@@ -105,9 +106,9 @@ export const updateUser = asyncHandler(async (req, res) => {
    if (phone && phone !== user.phone) orConditions.push({ phone });
 
    if (orConditions.length > 0) {
-      const existingUser = await User.findOne({ 
-         _id: { $ne: req.params.id }, 
-         $or: orConditions 
+      const existingUser = await User.findOne({
+         _id: { $ne: req.params.id },
+         $or: orConditions
       });
 
       if (existingUser) {
@@ -171,41 +172,119 @@ export const deleteUser = asyncHandler(async (req, res) => {
    res.json({ message: `Đã xóa tài khoản ${user.email} thành công.` });
 });
 
-// @desc    Lấy tất cả đơn đặt sân
+// @desc    Lấy tất cả đơn đặt sân (Admin)
 // @route   GET /api/admin/bookings
+// @access  Admin
 export const getAllBookings = asyncHandler(async (req, res) => {
-   const bookings = await Booking.find({})
-      .populate('userId', 'name email phone')
-      .populate('courtId', 'name address')
-      .sort({ createdAt: -1 });
-   res.json(bookings);
+   const { status, date, courtId, page = 1, limit = 10 } = req.query;
+
+   // Build filter
+   const filter = {};
+   if (status) filter.status = status;
+   if (date) filter.date = date;
+   if (courtId) filter.courtId = courtId;
+
+   const skip = (Number(page) - 1) * Number(limit);
+   const [bookings, total] = await Promise.all([
+      Booking.find(filter)
+         .populate('userId', 'email fullName phone')
+         .populate({
+            path: 'courtId',
+            select: 'name address images mainImage code typeId',
+            populate: {
+               path: 'typeId',
+               select: 'name color icon'
+            }
+         })
+         .sort({ createdAt: -1 })
+         .skip(skip)
+         .limit(Number(limit)),
+      Booking.countDocuments(filter),
+   ]);
+
+   res.json({
+      bookings,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+   });
 });
 
-// @desc    Cập nhật trạng thái đơn
+// @desc    Cập nhật trạng thái đơn đặt sân
 // @route   PATCH /api/admin/bookings/:id/status
+// @access  Admin
+// @body    { status: 'pending' | 'confirmed' | 'completed' | 'cancelled' }
 export const updateBookingStatus = asyncHandler(async (req, res) => {
    const { status } = req.body;
-   const booking = await Booking.findByIdAndUpdate(req.params.id, { status }, { new: true });
-   if (!booking) return res.status(404).json({ message: 'Không tìm thấy đơn đặt sân.' });
-   res.json(booking);
+
+   // Validate status value
+   const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+   if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Trạng thái không hợp lệ.' });
+   }
+
+   const booking = await Booking.findById(req.params.id);
+   if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy đơn đặt sân.' });
+   }
+
+   // Không thể thay đổi trạng thái từ COMPLETED hoặc CANCELLED
+   if (['completed', 'cancelled'].includes(booking.status)) {
+      return res.status(409).json({
+         message: `Không thể thay đổi trạng thái của đơn ${booking.status}.`
+      });
+   }
+
+   booking.status = status;
+   await booking.save();
+
+   res.json({
+      message: `Đã cập nhật trạng thái đơn thành "${status}".`,
+      booking
+   });
 });
 
 // @desc    Thống kê cho Dashboard Admin
 // @route   GET /api/admin/dashboard
+// @access  Admin
 export const getDashboardStats = asyncHandler(async (req, res) => {
-   const [totalBookings, totalCourts, totalUsers] = await Promise.all([
+   // Count statistics
+   const [totalBookings, totalCourts, totalUsers, totalPaid] = await Promise.all([
       Booking.countDocuments(),
       Court.countDocuments({ isActive: true }),
       User.countDocuments({ role: 'user' }),
+      Payment.countDocuments({ status: 'paid' }),
    ]);
 
-   const revenueData = await Booking.aggregate([
-      { $match: { paymentStatus: 'paid' } },
-      { $group: { _id: { $month: '$bookingDate' }, total: { $sum: '$totalPrice' } } },
-      { $sort: { '_id': 1 } },
+   // Revenue data by payment status
+   const revenueByStatus = await Payment.aggregate([
+      {
+         $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            totalAmount: { $sum: '$amount' }
+         }
+      },
    ]);
 
-   res.json({ totalBookings, totalCourts, totalUsers, revenueData });
+   // Booking status distribution
+   const bookingsByStatus = await Booking.aggregate([
+      {
+         $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+         }
+      },
+   ]);
+
+   res.json({
+      totalBookings,
+      totalCourts,
+      totalUsers,
+      totalPaid,
+      revenueByStatus,
+      bookingsByStatus,
+   });
 });
 
 // ─── OWNER MANAGEMENT ──────────────────────────────────────────
@@ -226,9 +305,9 @@ export const getOwners = asyncHandler(async (req, res) => {
 // @access  Admin
 export const updateOwnerStatus = asyncHandler(async (req, res) => {
    const { status, rejectionReason } = req.body;
-   
+
    if (!['approved', 'rejected', 'pending'].includes(status)) {
-       return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+      return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
    }
 
    const user = await User.findOne({ _id: req.params.id, role: 'owner' });
@@ -238,17 +317,17 @@ export const updateOwnerStatus = asyncHandler(async (req, res) => {
    }
 
    user.status = status;
-   
+
    if (status === 'rejected') {
-       if (!user.ownerInfo) user.ownerInfo = {};
-       user.ownerInfo.rejectionReason = rejectionReason;
+      if (!user.ownerInfo) user.ownerInfo = {};
+      user.ownerInfo.rejectionReason = rejectionReason;
    } else if (status === 'approved') {
-       user.ownerInfo.approvedAt = new Date().toISOString();
-       user.ownerInfo.approvedBy = req.user.email; // Đang là email admin
+      user.ownerInfo.approvedAt = new Date().toISOString();
+      user.ownerInfo.approvedBy = req.user.email; // Đang là email admin
    }
 
    await user.save();
-   
+
    res.json({ message: `Cập nhật trạng thái đối tác thành ${status}` });
 });
 
