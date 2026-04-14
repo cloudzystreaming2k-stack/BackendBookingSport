@@ -175,14 +175,34 @@ export const deleteUser = asyncHandler(async (req, res) => {
 // @desc    Lấy tất cả đơn đặt sân (Admin)
 // @route   GET /api/admin/bookings
 // @access  Admin
+// @query   page, limit, status, search, dateFrom, dateTo, courtId
 export const getAllBookings = asyncHandler(async (req, res) => {
-   const { status, date, courtId, page = 1, limit = 10 } = req.query;
+   const { status, search, dateFrom, dateTo, courtId, page = 1, limit = 10 } = req.query;
 
    // Build filter
    const filter = {};
-   if (status) filter.status = status;
-   if (date) filter.date = date;
+
+   // Lọc status (bỏ qua nếu là 'all')
+   if (status && status !== 'all') filter.status = status;
+
+   // Lọc sân cụ thể
    if (courtId) filter.courtId = courtId;
+
+   // Lọc khoảng ngày (dateFrom → dateTo)
+   if (dateFrom || dateTo) {
+      filter.date = {};
+      if (dateFrom) filter.date.$gte = dateFrom; // "2026-04-01"
+      if (dateTo)   filter.date.$lte = dateTo;   // "2026-04-30"
+   }
+
+   // Full-text Search: tìm trong bookingCode, customerName, customerPhone
+   if (search && search.trim()) {
+      filter.$or = [
+         { bookingCode:   { $regex: search.trim(), $options: 'i' } },
+         { customerName:  { $regex: search.trim(), $options: 'i' } },
+         { customerPhone: { $regex: search.trim(), $options: 'i' } },
+      ];
+   }
 
    const skip = (Number(page) - 1) * Number(limit);
    const [bookings, total] = await Promise.all([

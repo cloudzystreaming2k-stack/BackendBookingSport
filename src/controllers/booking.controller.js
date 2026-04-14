@@ -162,19 +162,36 @@ export const createBooking = asyncHandler(async (req, res) => {
  * @desc    Lấy danh sách lịch đặt của user hiện tại
  * @route   GET /api/bookings/my
  * @access  Private
+ * @query   page, limit
  */
 export const getMyBookings = asyncHandler(async (req, res) => {
-   const bookings = await Booking.find({ userId: req.user._id })
-      .populate({
-         path: 'courtId',
-         select: 'name address images mainImage code typeId',
-         populate: {
-            path: 'typeId',
-            select: 'name color icon'
-         }
-      })
-      .sort({ createdAt: -1 });
-   res.json(bookings);
+   const { page = 1, limit = 5 } = req.query;
+   const skip = (Number(page) - 1) * Number(limit);
+   
+   const filter = { userId: req.user._id };
+
+   const [bookings, total] = await Promise.all([
+      Booking.find(filter)
+         .populate({
+            path: 'courtId',
+            select: 'name address images mainImage code typeId',
+            populate: {
+               path: 'typeId',
+               select: 'name color icon'
+            }
+         })
+         .sort({ createdAt: -1 })
+         .skip(skip)
+         .limit(Number(limit)),
+      Booking.countDocuments(filter)
+   ]);
+
+   res.json({
+      bookings,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit))
+   });
 });
 
 /**
