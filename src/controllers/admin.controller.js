@@ -2,6 +2,8 @@ import Booking from '../models/Booking.model.js';
 import Payment from '../models/Payment.model.js';
 import User from '../models/User.model.js';
 import Court from '../models/Court.model.js';
+import Notification from '../models/Notification.model.js';
+import { io, onlineUsers } from '../socket.js';
 import asyncHandler from 'express-async-handler';
 
 // ─── USER MANAGEMENT ─────────────────────────────────────────────
@@ -192,14 +194,14 @@ export const getAllBookings = asyncHandler(async (req, res) => {
    if (dateFrom || dateTo) {
       filter.date = {};
       if (dateFrom) filter.date.$gte = dateFrom; // "2026-04-01"
-      if (dateTo)   filter.date.$lte = dateTo;   // "2026-04-30"
+      if (dateTo) filter.date.$lte = dateTo;   // "2026-04-30"
    }
 
    // Full-text Search: tìm trong bookingCode, customerName, customerPhone
    if (search && search.trim()) {
       filter.$or = [
-         { bookingCode:   { $regex: search.trim(), $options: 'i' } },
-         { customerName:  { $regex: search.trim(), $options: 'i' } },
+         { bookingCode: { $regex: search.trim(), $options: 'i' } },
+         { customerName: { $regex: search.trim(), $options: 'i' } },
          { customerPhone: { $regex: search.trim(), $options: 'i' } },
       ];
    }
@@ -257,6 +259,41 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
 
    booking.status = status;
    await booking.save();
+
+   // Gửi thông báo real-time khi chuyển sang confirmed, cancelled hoặc completed
+   if (['confirmed', 'cancelled', 'completed'].includes(status)) {
+      // Populate để lấy tên sân
+      await booking.populate('courtId', 'name');
+
+      let title, message;
+      if (status === 'confirmed') {
+         title = '✅ Đặt sân được xác nhận';
+         message = `Đơn ${booking.bookingCode} tại sân ${booking.courtId?.name || ''} đã được xác nhận thành công.`;
+      } else if (status === 'cancelled') {
+         title = '❌ Đặt sân đã bị hủy';
+         message = `Đơn ${booking.bookingCode} tại sân ${booking.courtId?.name || ''} đã bị hủy.`;
+      } else {
+         title = '🏆 Buổi chơi đã hoàn thành';
+         message = `Đơn ${booking.bookingCode} tại sân ${booking.courtId?.name || ''} đã hoàn thành. Cảm ơn bạn đã sử dụng dịch vụ!`;
+      }
+
+      // 1. Lưu vào DB (User offline vẫn thấy khi login lại)
+      const newNotification = await Notification.create({
+         userId: booking.userId,
+         title,
+         message,
+         type: 'booking',
+         bookingId: booking._id,
+      });
+
+      // 2. Emit real-time nếu User đang online
+      const socketId = onlineUsers.get(booking.userId.toString());
+      console.log(`[AdminController] Socket mapping userId=${booking.userId.toString()} -> socketId=${socketId}`);
+      if (socketId) {
+         console.log(`[AdminController] Emitting 'new-notification' to socketId=${socketId}`);
+         io.to(socketId).emit('new-notification', newNotification.toJSON());
+      }
+   }
 
    res.json({
       message: `Đã cập nhật trạng thái đơn thành "${status}".`,

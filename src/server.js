@@ -1,11 +1,13 @@
 import 'dotenv/config';
 
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { connectDB } from './config/db.js';
+import { initSocket } from './socket.js';
 
 // Routes
 import authRoutes from './routes/auth.routes.js';
@@ -14,15 +16,20 @@ import bookingRoutes from './routes/booking.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import locationRoutes from './routes/location.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 import { notFound, errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
+const httpServer = createServer(app);
+
+// Khởi tạo Socket.io
+initSocket(httpServer);
 
 // --- Middlewares ---
 app.use(helmet());
 app.use(cors({
    origin: process.env.CLIENT_URL || 'http://localhost:5173',
-   credentials: true, // Cho phép gửi Cookie
+   credentials: true,
 }));
 app.use(express.json());
 app.use(cookieParser());
@@ -34,10 +41,11 @@ if (process.env.NODE_ENV === 'development') {
 app.use('/api/auth', authRoutes);
 app.use('/api/courts', courtRoutes);
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin/payments', paymentRoutes); // Admin: quản lý tiền mặt
-app.use('/api/payments', paymentRoutes);       // User: tạo URL VNPay & nhận callback
+app.use('/api/admin/payments', paymentRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/locations', locationRoutes); // Public: danh sách Tỉnh/Huyện
+app.use('/api/locations', locationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // --- Health Check ---
 app.get('/api/health', (req, res) => {
@@ -52,10 +60,12 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'test') {
    connectDB().then(() => {
-      app.listen(PORT, () => {
+      httpServer.listen(PORT, () => {
          console.log(`✅ Server đang chạy tại http://localhost:${PORT}`);
+         console.log(`🔌 Socket.io đã sẵn sàng`);
       });
    });
 }
 
 export default app;
+
