@@ -17,6 +17,8 @@ import paymentRoutes from './routes/payment.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import locationRoutes from './routes/location.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import newsRoutes from './routes/news.routes.js';
+import publicNewsRoutes from './routes/news.public.routes.js';
 import { notFound, errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
@@ -46,6 +48,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin/news', newsRoutes);
+app.use('/api/news', publicNewsRoutes); // Public news API
 
 // --- Health Check ---
 app.get('/api/health', (req, res) => {
