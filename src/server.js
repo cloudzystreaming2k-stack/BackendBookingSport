@@ -20,6 +20,7 @@ import notificationRoutes from './routes/notification.routes.js';
 import newsRoutes from './routes/news.routes.js';
 import publicNewsRoutes from './routes/news.public.routes.js';
 import { publicContactRoutes, adminContactRoutes } from './routes/contact.routes.js';
+import chatbotRoutes from './routes/chatbot.routes.js';
 import { notFound, errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
@@ -53,6 +54,7 @@ app.use('/api/admin/news', newsRoutes);
 app.use('/api/news', publicNewsRoutes); // Public news API
 app.use('/api/contacts', publicContactRoutes);
 app.use('/api/admin/contacts', adminContactRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 // --- Health Check ---
 app.get('/api/health', (req, res) => {
