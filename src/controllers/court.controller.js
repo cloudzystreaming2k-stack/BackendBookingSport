@@ -8,7 +8,7 @@ import { initDefaultPricing, cleanupPricing } from './pricing.controller.js';
 // @route   GET /api/courts
 // @access  Public
 export const getCourts = asyncHandler(async (req, res) => {
-   const { type, minPrice, maxPrice, provinceCode, districtCode, page = 1, limit = 10 } = req.query;
+   const { type, minPrice, maxPrice, provinceCode, districtCode, page = 1, limit = 10, swLat, swLng, neLat, neLng } = req.query;
 
    const filter = { isActive: true, status: 'active' };
    if (type) filter.typeId = type;
@@ -18,6 +18,11 @@ export const getCourts = asyncHandler(async (req, res) => {
       filter['pricing.morning'] = {};
       if (minPrice) filter['pricing.morning'].$gte = Number(minPrice);
       if (maxPrice) filter['pricing.morning'].$lte = Number(maxPrice);
+   }
+
+   if (swLat && swLng && neLat && neLng) {
+      filter.latitude = { $gte: Number(swLat), $lte: Number(neLat) };
+      filter.longitude = { $gte: Number(swLng), $lte: Number(neLng) };
    }
 
    const total = await Court.countDocuments(filter);
