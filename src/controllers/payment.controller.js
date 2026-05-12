@@ -78,12 +78,12 @@ export const getPaymentByBooking = asyncHandler(async (req, res) => {
  */
 export const createVNPayUrl = asyncHandler(async (req, res) => {
    const { bookingId, bankCode } = req.body;
-   
+
    const booking = await Booking.findById(bookingId);
    if (!booking) {
       return res.status(404).json({ message: 'Không tìm thấy đơn đặt sân' });
    }
-   
+
    if (booking.paymentStatus === 'paid') {
       return res.status(400).json({ message: 'Đơn đặt sân này đã được thanh toán' });
    }
@@ -91,7 +91,8 @@ export const createVNPayUrl = asyncHandler(async (req, res) => {
    const tmnCode = process.env.VNP_TMN_CODE || 'DEMOCODE'; // Thay bằng VNP_TMNCODE thật
    const secretKey = process.env.VNP_HASH_SECRET || 'DEMOSECRET1234567890';
    const vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
-   const returnUrl = process.env.VNP_RETURN_URL || 'http://localhost:5000/api/payments/vnpay/return';
+   // Tự động nhận diện host (localhost hoặc domain trên Render)
+   const returnUrl = process.env.VNP_RETURN_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}/api/payments/vnpay/return`;
 
    const date = new Date();
    // VNPay yêu cầu thời gian mặc định là GMT+7 (Asia/Ho_Chi_Minh)
@@ -125,7 +126,7 @@ export const createVNPayUrl = asyncHandler(async (req, res) => {
    const signData = qs.stringify(vnp_Params, { encode: false });
    const hmac = crypto.createHmac('sha512', secretKey);
    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-   
+
    vnp_Params['vnp_SecureHash'] = signed;
    const paymentUrl = vnpUrl + '?' + qs.stringify(vnp_Params, { encode: false });
 
@@ -155,10 +156,10 @@ export const vnpayReturn = asyncHandler(async (req, res) => {
 
    const bookingId = vnp_Params['vnp_TxnRef'];
    const responseCode = vnp_Params['vnp_ResponseCode'];
-   
-   // Thay bằng Base URL Frontend Local của anh
-   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-   
+
+   // Thay bằng Base URL Frontend Local của anh, tự động loại bỏ dấu "/" ở cuối nếu lỡ nhập dư
+   const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+
    // Lấy booking code để hiển thị cho thân thiện thay vì ObjectID của MongoDB
    let displayCode = bookingId;
    try {
@@ -175,38 +176,38 @@ export const vnpayReturn = asyncHandler(async (req, res) => {
       if (responseCode === '00') {
          // Kịch bản Thành công (Happy Path)
          const booking = await Booking.findById(bookingId);
-         
+
          // Bảo mật: Kiểm tra số tiền trả về có khớp với DB không (đề phòng giá bị đổi trong lúc đợi thanh toán)
          const vnpAmount = vnp_Params['vnp_Amount'] / 100;
          if (booking && vnpAmount !== booking.finalPrice) {
-             return res.redirect(`${frontendUrl}/booking-success/${displayCode}?status=failed&reason=amount_mismatch`);
+            return res.redirect(`${frontendUrl}/booking-success/${displayCode}?status=failed&reason=amount_mismatch`);
          }
 
          if (booking && booking.paymentStatus !== 'paid') {
             booking.paymentStatus = 'paid';
-             booking.preferredPaymentMethod = 'vnpay'; 
-             
-             try {
-                 // Tạo Payment record trước để đảm bảo Schema chuẩn xác
-                 await Payment.create({
-                     bookingId: booking._id,
-                     amount: vnpAmount,
-                     paymentMethod: 'vnpay',
-                     // Bỏ qua trường createdBy do đây là hệ thống tự động ghi nhận
-                     transactionId: vnp_Params['vnp_TransactionNo'], 
-                     gatewayTxnRef: vnp_Params['vnp_TxnRef'],
-                     status: 'paid',
-                     notes: 'Thanh toán điện tử tự động qua Hệ thống VNPay'
-                 });
+            booking.preferredPaymentMethod = 'vnpay';
 
-                 // Lưu Booking sau cùng
-                 await booking.save();
-             } catch (err) {
-                 console.error("Lỗi khi lưu giao dịch VNPay: ", err);
-                 return res.redirect(`${frontendUrl}/booking-success/${displayCode}?status=failed&reason=database_error`);
-             }
+            try {
+               // Tạo Payment record trước để đảm bảo Schema chuẩn xác
+               await Payment.create({
+                  bookingId: booking._id,
+                  amount: vnpAmount,
+                  paymentMethod: 'vnpay',
+                  // Bỏ qua trường createdBy do đây là hệ thống tự động ghi nhận
+                  transactionId: vnp_Params['vnp_TransactionNo'],
+                  gatewayTxnRef: vnp_Params['vnp_TxnRef'],
+                  status: 'paid',
+                  notes: 'Thanh toán điện tử tự động qua Hệ thống VNPay'
+               });
+
+               // Lưu Booking sau cùng
+               await booking.save();
+            } catch (err) {
+               console.error("Lỗi khi lưu giao dịch VNPay: ", err);
+               return res.redirect(`${frontendUrl}/booking-success/${displayCode}?status=failed&reason=database_error`);
+            }
          }
-         
+
          return res.redirect(`${frontendUrl}/booking-success/${displayCode}?status=success`);
       } else {
          // Kịch bản khách hàng Hủy (Cancel Path) hoặc lỗi khác
@@ -223,13 +224,13 @@ function sortObject(obj) {
    let sorted = {};
    let str = [];
    for (let key in obj) {
-       if (Object.prototype.hasOwnProperty.call(obj, key)) {
-           str.push(encodeURIComponent(key));
-       }
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+         str.push(encodeURIComponent(key));
+      }
    }
    str.sort();
    for (let key = 0; key < str.length; key++) {
-       sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, "+");
+      sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, "+");
    }
    return sorted;
 }
